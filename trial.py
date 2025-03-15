@@ -21,6 +21,57 @@ except Exception as e:
 SERVER_URL = "http://34.31.80.242:5000"
 print(f"Server URL set to: {SERVER_URL}")
 
+# Disease treatment messages (Organic, ultra user-friendly, no bullet points)
+disease_messages = {
+    "angular leafspot": """  
+- Keep those leaves dry by watering at the base instead of overhead. 
+- Gently remove any infected leaves and toss them out. 
+- For a natural fix, try spraying neem oil (diluted to 1-2%) or some compost tea—it works wonders!""",
+    
+    "leaf spot": """
+- Go for resistant strawberry varieties to stay ahead of trouble. 
+- Clear away affected leaves and keep the area tidy. 
+- A quick spray of baking soda mix (1 teaspoon with 1 teaspoon oil in a gallon of water) or garlic extract can help turn things around.""",
+    
+    "powder mildew": """  
+- Give your plants some breathing room with good spacing for air flow. 
+- Ease up on nitrogen fertilizer to keep growth in check. 
+- A simple milk spray (1 part milk to 9 parts water) or a dusting of sulfur can clear up that powdery mess fast.""",
+    
+    "strawberry leaf scorch": """  
+- Space out your plants to let air move freely and avoid crowding. 
+- Water at the base to keep leaves dry and happy. 
+- A splash of neem oil or a potassium bicarbonate mix (1 tablespoon per gallon of water) can bring them back to life.""",
+
+    "anthracnose fruit rot": """
+- Keep the fruit off the ground with some mulch or straw to stay dry. 
+- Pick off any mushy or dark-spotted berries right away. 
+- A gentle spray of copper soap or a chamomile tea rinse can help keep this funky rot in check.""",
+
+    "gray mold": """
+- Snip off any fuzzy, grayish fruit or leaves as soon as you spot them. 
+- Make sure air flows nicely around your plants with good spacing. 
+- A quick mist of grapefruit seed extract or a vinegar mix (1 tablespoon per gallon of water) can nudge things back to healthy.""",
+
+    "powdery mildew fruit": """
+- Give your berries some space to breathe with proper pruning and airflow. 
+- Avoid overwatering and keep the soil just right—not too soggy. 
+- A light spray of milk (1 part milk to 9 parts water) or a sprinkle of sulfur powder can chase that powdery coating away."""
+}
+
+# Fetch additional info from Firebase
+def get_disease_info(disease_name):
+    print(f"Fetching additional info for {disease_name} from Firebase...")
+    try:
+        doc_ref = db.collection("disease_info").document(disease_name).get()
+        if doc_ref.exists:
+            return doc_ref.to_dict().get("description", "No additional info available.")
+        else:
+            return "No additional info found in Firebase."
+    except Exception as e:
+        print(f"❌ Error fetching disease info: {e}")
+        return "Error fetching additional info."
+
 # Check if the server is running
 def check_server():
     print("Checking server status...")
@@ -53,13 +104,32 @@ def test_prediction(image_path):
             # Extract prediction data
             data = response.json()
             print(f"Parsed JSON: {data}")
-            disease_name = data.get("predicted_disease", "Unknown")
-            confidence = data.get("confidence", 0.0)
+            disease_name = data.get("predicted_disease", "Unknown").replace("_", " ").title()
+            confidence = data.get("disease_confidence", 0.0)  # Updated to match two-stage prediction
+
+            # If the model predicts "Strawberry Healthy", do NOT store it in Firestore
+            if disease_name.lower() == "strawberry healthy":
+                print("✅ The leaf is healthy. No need to store in Firestore.")
+                return  # Stop execution here
+
+            # Get additional info from Firebase
+            firebase_info = get_disease_info(disease_name)
+
+            # Get disease treatment message
+            treatment_info = disease_messages.get(disease_name.lower(), "No specific treatment guidelines available.")
+
+            # Combine additional info and treatment info
+            additional_info = f"{treatment_info}"
+
+            # Print disease-specific message
+            print(f"\n⚠️ Detected Disease: {disease_name}")
+            print(treatment_info)
+            print(f"\n📌 Additional Info: {additional_info}")
 
             # Get current date and time
             now = datetime.now()
             date = now.strftime("%Y-%m-%d")
-            time = now.strftime("%H:%M:%S")
+            time = now.strftime("%I:%M %p")
 
             # Store in Firestore with Base64 image
             print("Writing to Firestore...")
@@ -69,7 +139,8 @@ def test_prediction(image_path):
                 'date': date,
                 'time': time,
                 'imageBase64': image_base64,  # Store Base64 string
-                'processedFrom': 'trial.py'
+                'processedFrom': 'trial.py',
+                'additionalInfo': additional_info  # Store combined info from Firebase and treatment message
             })
             print(f"🔥 Successfully stored in Firestore with doc ID: {doc_ref[1].id}")
             
@@ -90,3 +161,6 @@ if __name__ == "__main__":
         test_prediction(test_image_path)
     else:
         print("Server check failed, exiting.")
+        
+
+    
