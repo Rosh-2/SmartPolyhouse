@@ -39,7 +39,7 @@ try:
     binary_names = {v: k for k, v in binary_indices.items()}
     leaf_names = {v: k for k, v in leaf_indices.items()}
     fruit_names = {v: k for k, v in fruit_indices.items()}
-    
+        
     print("✅ All models loaded successfully!")
 except Exception as e:
     raise RuntimeError(f"❌ Error loading models: {e}")
