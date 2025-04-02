@@ -3,6 +3,7 @@ from firebase_admin import credentials, firestore, initialize_app
 from datetime import datetime
 import base64
 import os
+import sys
 
 print("Starting script...")
 
@@ -21,7 +22,7 @@ except Exception as e:
 SERVER_URL = "http://34.31.80.242:5000"
 print(f"Server URL set to: {SERVER_URL}")
 
-# Disease treatment messages (Organic, ultra user-friendly, no bullet points)
+# Disease treatment messages
 disease_messages = {
     "angular leafspot": """  
 - Keep those leaves dry by watering at the base instead of overhead. 
@@ -76,7 +77,7 @@ def get_disease_info(disease_name):
 def check_server():
     print("Checking server status...")
     try:
-        response = requests.get(f"{SERVER_URL}/ping", timeout=5)
+        response = requests.get(f'{SERVER_URL}/ping', timeout=5)
         print(f"Ping Status: {response.status_code}, Body: {response.text}")
         return response.status_code == 200
     except requests.exceptions.RequestException as e:
@@ -84,8 +85,8 @@ def check_server():
         return False
 
 # Test the /predict route and store in Firestore with Base64 image
-def test_prediction(image_path):
-    print(f"Processing image: {image_path}")
+def test_prediction(image_path, user_id):
+    print(f"Processing image: {image_path} for user: {user_id}")
     try:
         # Convert image to Base64
         print("Converting image to Base64...")
@@ -105,12 +106,12 @@ def test_prediction(image_path):
             data = response.json()
             print(f"Parsed JSON: {data}")
             disease_name = data.get("predicted_disease", "Unknown").replace("_", " ").title()
-            confidence = data.get("disease_confidence", 0.0)  # Updated to match two-stage prediction
+            confidence = data.get("disease_confidence", 0.0)
 
             # If the model predicts "Strawberry Healthy", do NOT store it in Firestore
             if disease_name.lower() == "strawberry healthy":
                 print("✅ The leaf is healthy. No need to store in Firestore.")
-                return  # Stop execution here
+                return
 
             # Get additional info from Firebase
             firebase_info = get_disease_info(disease_name)
@@ -131,16 +132,16 @@ def test_prediction(image_path):
             date = now.strftime("%Y-%m-%d")
             time = now.strftime("%I:%M %p")
 
-            # Store in Firestore with Base64 image
+            # Store in Firestore under user-specific collection
             print("Writing to Firestore...")
-            doc_ref = db.collection('diseases').add({
+            doc_ref = db.collection('users').document(user_id).collection('diseases').add({
                 'diseaseName': disease_name,
                 'confidence': float(confidence),
                 'date': date,
                 'time': time,
-                'imageBase64': image_base64,  # Store Base64 string
+                'imageBase64': image_base64,
                 'processedFrom': 'trial.py',
-                'additionalInfo': additional_info  # Store combined info from Firebase and treatment message
+                'additionalInfo': additional_info
             })
             print(f"🔥 Successfully stored in Firestore with doc ID: {doc_ref[1].id}")
             
@@ -155,12 +156,14 @@ def test_prediction(image_path):
 
 if __name__ == "__main__":
     print("Entering main block...")
+    if len(sys.argv) < 2:
+        print("❌ Please provide a user_id as a command-line argument.")
+        exit(1)
+    
+    user_id = sys.argv[1]  # Get user_id from command-line argument
     if check_server():
         print("Server check passed, waiting for image path...")
         test_image_path = input("Enter the path of the test image: ").strip()
-        test_prediction(test_image_path)
+        test_prediction(test_image_path, user_id)
     else:
         print("Server check failed, exiting.")
-        
-
-    
